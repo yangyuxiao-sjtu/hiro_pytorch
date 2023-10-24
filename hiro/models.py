@@ -312,7 +312,19 @@ class HigherController(TD3Controller):
         max_indices = np.argmax(logprob, axis=-1)
 
         return candidates[np.arange(batch_size), max_indices]
+    def policy_with_noise(self, state, goal, to_numpy=True):
+        state = get_tensor(state)
+        goal = get_tensor(goal)
+        action = self.actor(state, goal)
 
+        action = action + self._sample_exploration_noise(action)
+        action = torch.min(action,  self.actor.scale)
+        action = torch.max(action, -self.actor.scale)
+
+        if to_numpy:
+            return action.cpu().data.numpy().squeeze()
+
+        return action.squeeze()
     def train(self, replay_buffer, low_con):
         if not self._initialized:
             self._initialize_target_networks()
@@ -392,34 +404,35 @@ class Agent():
         success = 0
         rewards = []
         env.evaluate = True
-        for e in range(eval_episodes):
-            obs = env.reset()
-            fg = obs['desired_goal']
-            s = obs['observation']
-            done = False
-            reward_episode_sum = 0
-            step = 0
-            
-            self.set_final_goal(fg)
-
-            while not done:
-                if render:
-                    env.render()
-                if sleep>0:
-                    time.sleep(sleep)
-
-                a, r, n_s, done = self.step(s, env, step)
-                reward_episode_sum += r
+        with torch.no_grad():
+            for e in range(eval_episodes):
+                obs = env.reset()
+                fg = obs['desired_goal']
+                s = obs['observation']
+                done = False
+                reward_episode_sum = 0
+                step = 0
                 
-                s = n_s
-                step += 1
-                self.end_step()
-            else:
-                error = np.sqrt(np.sum(np.square(fg-s[:2])))
-                print('Goal, Curr: (%02.2f, %02.2f, %02.2f, %02.2f)     Error:%.2f'%(fg[0], fg[1], s[0], s[1], error))
-                rewards.append(reward_episode_sum)
-                success += 1 if error <=5 else 0
-                self.end_episode(e)
+                self.set_final_goal(fg)
+
+                while not done:
+                    if render:
+                        env.render()
+                    if sleep>0:
+                        time.sleep(sleep)
+
+                    a, r, n_s, done = self.step(s, env, step)
+                    reward_episode_sum += r
+                    
+                    s = n_s
+                    step += 1
+                    self.end_step()
+                else:
+                    error = np.sqrt(np.sum(np.square(fg-s[:2])))
+                    print('Goal, Curr: (%02.2f, %02.2f, %02.2f, %02.2f)     Error:%.2f'%(fg[0], fg[1], s[0], s[1], error))
+                    rewards.append(reward_episode_sum)
+                    success += 1 if error <=5 else 0
+                    self.end_episode(e)
 
         env.evaluate = False
         return np.array(rewards), success/eval_episodes
@@ -560,7 +573,8 @@ class HiroAgent(Agent):
         self.reward_scaling = reward_scaling
         self.episode_subreward = 0
         self.sr = 0
-
+        self.tensor_sg = torch.zeros(subgoal_dim)
+        self.tensor_n_sg = torch.zeros(subgoal_dim)
         self.buf = [None, None, None, 0, None, None, [], []]
         self.fg = np.array([0,0])
         self.sg = self.subgoal.action_space.sample()
@@ -587,6 +601,7 @@ class HiroAgent(Agent):
         if explore:
             if global_step < self.start_training_steps:
                 n_sg = self.subgoal.action_space.sample()
+                self.tensor_n_sg = get_tensor(n_sg)
             else:
                 n_sg = self._choose_subgoal_with_noise(step, s, self.sg, n_s)
         else:
@@ -601,7 +616,7 @@ class HiroAgent(Agent):
 
         # Low Replay Buffer
         self.replay_buffer_low.append(
-            s, self.sg, a, n_s, self.n_sg, self.sr, float(d))
+            s, self.sg, a, n_s, self.n_sg, self.sr, float(d),self.tensor_sg.clone(),self.tensor_n_sg.clone())
 
         # High Replay Buffer
         if _is_update(step, self.buffer_freq, rem=1):
@@ -623,13 +638,70 @@ class HiroAgent(Agent):
         self.buf[3] += self.reward_scaling * r
         self.buf[6].append(s)
         self.buf[7].append(a)
+    def low_con__train(self, states, goals, actions, rewards, n_states, n_goals, not_done,tensor_g,tensor_n_g):
+        self.low_con.total_it += 1
+        with torch.no_grad():
+            noise = (
+                torch.randn_like(actions) * self.low_con.policy_noise
+            ).clamp(-self.low_con.noise_clip, self.low_con.noise_clip)
 
+            n_actions = self.low_con.actor_target(n_states, n_goals) + noise
+            n_actions = torch.min(n_actions,  self.low_con.actor.scale)
+            n_actions = torch.max(n_actions, -self.low_con.actor.scale)
+
+            target_Q1 = self.low_con.critic1_target(n_states, n_goals, n_actions)
+            target_Q2 = self.low_con.critic2_target(n_states, n_goals, n_actions)
+            target_Q = torch.min(target_Q1, target_Q2)
+            target_Q_detached = (rewards + not_done * self.low_con.gamma * target_Q).detach()
+
+        current_Q1 = self.low_con.critic1(states, goals, actions)
+        current_Q2 = self.low_con.critic2(states, goals, actions)
+
+        critic1_loss = F.smooth_l1_loss(current_Q1, target_Q_detached)
+        critic2_loss = F.smooth_l1_loss(current_Q2, target_Q_detached)
+        critic_loss = critic1_loss + critic2_loss
+
+        td_error = (target_Q_detached - current_Q1).mean().cpu().data.numpy()
+
+        self.low_con.critic1_optimizer.zero_grad()
+        self.low_con.critic2_optimizer.zero_grad()
+        critic_loss.backward()
+        self.low_con.critic1_optimizer.step()
+        self.low_con.critic2_optimizer.step()
+
+        if self.low_con.total_it % self.low_con.policy_freq == 0:
+           # tensor_g=tensor_g.detach()
+            a = self.low_con.actor(states, tensor_g)
+            Q1 = self.low_con.critic1(states, tensor_g.detach(), a)
+            actor_loss = -Q1.mean() # multiply by neg becuz gradient ascent
+
+            self.low_con.actor_optimizer.zero_grad()
+            actor_loss.backward(retain_graph=True)
+            self.low_con.actor_optimizer.step()
+            self.high_con.actor_optimizer.zero_grad()
+            self.high_con.actor_optimizer.step()
+            self.low_con._update_target_network(self.low_con.critic1_target, self.low_con.critic1, self.low_con.tau)
+            self.low_con._update_target_network(self.low_con.critic2_target, self.low_con.critic2, self.low_con.tau)
+            self.low_con._update_target_network(self.low_con.actor_target, self.low_con.actor, self.low_con.tau)
+
+            return {'actor_loss_'+self.low_con.name: actor_loss, 'critic_loss_'+self.low_con.name: critic_loss}, \
+                    {'td_error_'+self.low_con.name: td_error}
+
+        return {'critic_loss_'+self.low_con.name: critic_loss}, \
+                    {'td_error_'+self.low_con.name: td_error}
+    def low_con_train(self, replay_buffer):
+        if not self.low_con._initialized:
+            self.low_con._initialize_target_networks()
+
+        states, sgoals, actions, n_states, n_sgoals, rewards, not_done,tensor_g,tensor_n_g = replay_buffer.sample()
+
+        return self.low_con__train(states, sgoals, actions, rewards, n_states, n_sgoals, not_done,tensor_g,tensor_n_g)
     def train(self, global_step):
         losses = {}
         td_errors = {}
 
         if global_step >= self.start_training_steps:
-            loss, td_error = self.low_con.train(self.replay_buffer_low)
+            loss, td_error = self.low_con_train(self.replay_buffer_low)
             losses.update(loss)
             td_errors.update(td_error)
 
@@ -645,9 +717,17 @@ class HiroAgent(Agent):
 
     def _choose_subgoal_with_noise(self, step, s, sg, n_s):
         if step % self.buffer_freq == 0: # Should be zero
-            sg = self.high_con.policy_with_noise(s, self.fg)
+             self.tensor_n_sg= self.high_con.policy_with_noise(s, self.fg,to_numpy=False)
+
+             sg= self.tensor_n_sg.detach().cpu().numpy().squeeze()
         else:
-            sg = self.subgoal_transition(s, sg, n_s)
+            # loss = -self.tensor_sg.sum()
+            # loss.backward(retain_graph=True)
+            # print("SSS")
+            self.tensor_n_sg = self.subgoal_transition(s, self.tensor_sg.clone(), n_s)
+            # loss = -self.tensor_n_sg.sum()
+            # loss.backward(retain_graph=True)
+            sg = self.tensor_n_sg.detach().cpu().numpy()
 
         return sg
 
@@ -663,7 +743,14 @@ class HiroAgent(Agent):
         return sg
 
     def subgoal_transition(self, s, sg, n_s):
-        return s[:sg.shape[0]] + sg - n_s[:sg.shape[0]]
+        if( torch.is_tensor(sg)):
+            tensor_s =torch.from_numpy(s).to(device)
+            tensor_n_s = torch.from_numpy(n_s).to(device)
+            result = tensor_s[:sg.shape[0]] + sg - tensor_n_s[:sg.shape[0]]
+            return result
+        else :
+            return s[:sg.shape[0]] + sg - s[:sg.shape[0]]
+        
 
     def low_reward(self, s, sg, n_s):
         abs_s = s[:sg.shape[0]] + sg
@@ -672,6 +759,7 @@ class HiroAgent(Agent):
     def end_step(self):
         self.episode_subreward += self.sr
         self.sg = self.n_sg
+        self.tensor_sg=self.tensor_n_sg.clone()
 
     def end_episode(self, episode, logger=None):
         if logger: 
