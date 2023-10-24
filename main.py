@@ -82,18 +82,18 @@ class Trainer():
     
     def evaluate(self, e):
         # Print
-        if _is_update(e, args.print_freq):
-            agent = copy.deepcopy(self.agent)
-            rewards, success_rate = agent.evaluate_policy(self.env)
-            #rewards, success_rate = self.agent.evaluate_policy(self.env)
-            self.logger.write('Success Rate', success_rate, e)
-            
-            print('episode:{episode:05d}, mean:{mean:.2f}, std:{std:.2f}, median:{median:.2f}, success:{success:.2f}'.format(
-                    episode=e, 
-                    mean=np.mean(rewards), 
-                    std=np.std(rewards), 
-                    median=np.median(rewards), 
-                    success=success_rate))
+        # if _is_update(e, args.print_freq):
+        agent = self.agent
+        rewards, success_rate = agent.evaluate_policy(self.env)
+        #rewards, success_rate = self.agent.evaluate_policy(self.env)
+        self.logger.write('Success Rate', success_rate, e)
+        
+        print('episode:{episode:05d}, mean:{mean:.2f}, std:{std:.2f}, median:{median:.2f}, success:{success:.2f}'.format(
+                episode=e, 
+                mean=np.mean(rewards), 
+                std=np.std(rewards), 
+                median=np.median(rewards), 
+                success=success_rate))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -109,8 +109,8 @@ if __name__ == '__main__':
     parser.add_argument('--td3', action='store_true')
 
     # Training
-    parser.add_argument('--num_episode', default=25000, type=int)
-    parser.add_argument('--start_training_steps', default=2500, type=int, help='Unit = Global Step')
+    parser.add_argument('--num_episode', default=250, type=int)
+    parser.add_argument('--start_training_steps', default=250, type=int, help='Unit = Global Step')
     parser.add_argument('--writer_freq', default=25, type=int, help='Unit = Global Step')
     # Training (Model Saving)
     parser.add_argument('--subgoal_dim', default=15, type=int)
