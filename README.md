@@ -2,7 +2,7 @@ try to make some changes,but have lots of problems
 用  
 """python3 main.py --train""" 进行训练  
 目前会报错RuntimeError: one of the variables needed for gradient computation has been modified by an inplace operation:  
-尝试过设置 inplace=False in nn.ReLU and nn.LeakyReLU(https://github.com/NVlabs/FUNIT/issues/23),但是并不管用  
+尝试过设置 inplace=False in nn.ReLU and nn.LeakyReLU(https://github.com/NVlabs/FUNIT/issues/23), 但是并不管用  
 修改思路：  
 原本代码在policy_with_noise中默认to_numpy=True并导致梯度不被记录，因此考虑在原来结构上单独增加tensor_n_sg和tensor_sg来记录to_numpy=False的结果并把tensor_sg转为
 numpy的结果重新赋给sg,n_sg来使得新加内容尽可能和原本代码解耦，为此，还需要在hiro_utils中ReplayBuffer增加tensor_sg和tensor_n_sg的buffer  
