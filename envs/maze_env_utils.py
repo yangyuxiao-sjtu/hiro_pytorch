@@ -53,6 +53,14 @@ def construct_maze(maze_id='Maze'):
         [1, 0, 0, 0, 1],
         [1, 1, 1, 1, 1],
     ]
+  elif maze_id == 'Point':
+    structure = [
+        [1, 1, 1, 1, 1],
+        [1, 'r', 0, 0, 1],
+        [1, 1, 1, 0, 1],
+        [1, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1],
+    ]
   elif maze_id == 'Push':
     structure = [
         [1, 1,  1,  1,   1],
