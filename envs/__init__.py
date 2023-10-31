@@ -15,6 +15,11 @@ def get_goal_sample_fn(env_name, evaluate):
             return lambda: np.array([0., 16.])
         else:
             return lambda: np.random.uniform((-4, -4), (20, 20))
+    elif env_name == 'PointMaze':
+        if evaluate:
+            return lambda: np.array([0., 16.])
+        else:
+            return lambda: np.random.uniform((-4, -4), (20, 20))
     elif env_name == 'AntPush':
         return lambda: np.array([0., 19.])
     elif env_name == 'AntFall':
@@ -25,6 +30,8 @@ def get_goal_sample_fn(env_name, evaluate):
 
 def get_reward_fn(env_name):
     if env_name == 'AntMaze':
+        return lambda obs, goal: -np.sum(np.square(obs[:2] - goal)) ** 0.5
+    elif env_name == 'PointMaze':
         return lambda obs, goal: -np.sum(np.square(obs[:2] - goal)) ** 0.5
     elif env_name == 'AntPush':
         return lambda obs, goal: -np.sum(np.square(obs[:2] - goal)) ** 0.5
