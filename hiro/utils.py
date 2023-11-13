@@ -8,7 +8,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def var(tensor):
     if torch.cuda.is_available():
-        return tensor.cuda()
+        return tensor.to(device)
     else:
         return tensor
 
