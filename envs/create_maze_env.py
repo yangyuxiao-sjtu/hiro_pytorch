@@ -16,18 +16,19 @@
 from .ant_maze_env import AntMazeEnv
 from .point_maze_env import PointMazeEnv
 
-def create_maze_env(env_name=None):
-  maze_id = None
-  if env_name.startswith('AntMaze'):
-    maze_id = 'Maze'
-  elif env_name.startswith('AntPush'):
-    maze_id = 'Push'
-  elif env_name.startswith('AntFall'):
-    maze_id = 'Fall'
-  elif env_name.startswith('PointMaze'):
-    maze_id='Point'
-    return PointMazeEnv(maze_id=maze_id)
-  else:
-    raise ValueError('Unknown maze environment %s' % env_name)
 
-  return AntMazeEnv(maze_id=maze_id)
+def create_maze_env(env_name=None):
+    maze_id = None
+    if env_name.startswith("AntMaze"):
+        maze_id = "Maze"
+    elif env_name.startswith("AntPush"):
+        maze_id = "Push"
+    elif env_name.startswith("AntFall"):
+        maze_id = "Fall"
+    elif env_name.startswith("PointMaze"):
+        maze_id = "Point"
+        return PointMazeEnv(maze_id=maze_id)
+    else:
+        raise ValueError("Unknown maze environment %s" % env_name)
+
+    return AntMazeEnv(maze_id=maze_id)
