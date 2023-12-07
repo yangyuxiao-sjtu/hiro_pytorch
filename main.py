@@ -7,8 +7,8 @@ from envs import EnvWithGoal
 from envs.create_maze_env import create_maze_env
 from hiro.hiro_utils import Subgoal 
 from hiro.utils import Logger, _is_update, record_experience_to_csv, listdirs
-from hiro.models import HiroAgent, TD3Agent
-
+from hiro.models_back import HiroAgent, TD3Agent
+import torch
 def run_evaluation(args, env, agent):
     agent.load(args.load_episode)
 
@@ -50,7 +50,7 @@ class Trainer():
                 a, r, n_s, done = self.agent.step(s, self.env, step, global_step, explore=True)
 
                 # Append
-                self.agent.append(step, s, a, n_s, r, done)
+                self.agent.append(step, s, a, n_s, r, done,self.logger,global_step)
 
                 # Train
                 losses, td_errors = self.agent.train(global_step)
@@ -82,22 +82,28 @@ class Trainer():
     
     def evaluate(self, e):
         # Print
-        # if _is_update(e, args.print_freq):
-        agent = self.agent
-        rewards, success_rate = agent.evaluate_policy(self.env)
-        #rewards, success_rate = self.agent.evaluate_policy(self.env)
-        self.logger.write('Success Rate', success_rate, e)
-        
-        print('episode:{episode:05d}, mean:{mean:.2f}, std:{std:.2f}, median:{median:.2f}, success:{success:.2f}'.format(
-                episode=e, 
-                mean=np.mean(rewards), 
-                std=np.std(rewards), 
-                median=np.median(rewards), 
-                success=success_rate))
+        if _is_update(e, args.print_freq):
+            agent = copy.deepcopy(self.agent)
+            rewards, success_rate = agent.evaluate_policy(self.env)
+            #rewards, success_rate = self.agent.evaluate_policy(self.env)
+            self.logger.write('Success Rate', success_rate, e)
+            
+            print('episode:{episode:05d}, mean:{mean:.2f}, std:{std:.2f}, median:{median:.2f}, success:{success:.2f}'.format(
+                    episode=e, 
+                    mean=np.mean(rewards), 
+                    std=np.std(rewards), 
+                    median=np.median(rewards), 
+                    success=success_rate))
+def setup_seed(seed):
+     torch.manual_seed(seed)
+     torch.cuda.manual_seed_all(seed)
+     np.random.seed(seed)
+     #random.seed(seed)
+     torch.backends.cudnn.deterministic = True
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-
+    setup_seed(42)
     # Across All
     parser.add_argument('--train', action='store_true')
     parser.add_argument('--eval', action='store_true')
@@ -109,8 +115,8 @@ if __name__ == '__main__':
     parser.add_argument('--td3', action='store_true')
 
     # Training
-    parser.add_argument('--num_episode', default=250, type=int)
-    parser.add_argument('--start_training_steps', default=250, type=int, help='Unit = Global Step')
+    parser.add_argument('--num_episode', default=25000, type=int)
+    parser.add_argument('--start_training_steps', default=2500, type=int, help='Unit = Global Step')
     parser.add_argument('--writer_freq', default=25, type=int, help='Unit = Global Step')
     # Training (Model Saving)
     parser.add_argument('--subgoal_dim', default=15, type=int)
@@ -130,7 +136,11 @@ if __name__ == '__main__':
     parser.add_argument('--train_freq', default=10, type=int)
     parser.add_argument('--reward_scaling', default=0.1, type=float)
     args = parser.parse_args()
-
+    if(args.env=='PointMaze'):
+        args.subgoal_dim=3
+        args.num_episode=20000
+        args.model_save_freq=1000
+        args.print_freq = 100
     # Select or Generate a name for this experiment
     if args.exp_name:
         experiment_name = args.exp_name
