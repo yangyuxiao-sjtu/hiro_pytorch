@@ -267,14 +267,15 @@ class TD3Controller(object):
             self.actor_optimizer.zero_grad()
             actor_loss.backward()
             self.actor_optimizer.step()
-            # print('whici conf:',which_conf)
+
+            # print('which conf:',which_conf)
             if which_conf == "Low" and "kwargs" in kwargs:
                 kwargs = kwargs["kwargs"]
-                # print(kwargs)
                 high_con = kwargs["policy"]
                 fg = kwargs["fg"]
+
                 new_sg = high_con.policy(states, fg, to_numpy=False)
-                # new_sg=new_sg.detach()
+                # new_sg = new_sg.detach()
                 a = self.actor(states, new_sg)
                 new_Q1 = self.critic1(states, new_sg.detach(), a)  # changed
                 actor_loss_new = -new_Q1.mean() * hype_lam
@@ -285,7 +286,6 @@ class TD3Controller(object):
                 #         print("weight.grad:", weight.grad.mean(), weight.grad.min(), weight.grad.max())
 
                 high_con.actor_optimizer.step()
-
                 # self.actor_optimizer.zero_grad()
 
             self._update_target_network(self.critic1_target, self.critic1, self.tau)

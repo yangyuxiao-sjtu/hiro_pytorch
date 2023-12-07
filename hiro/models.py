@@ -7,16 +7,16 @@
 # (Data-Efficient Hierarchical Reinforcement Learning)
 # Parameters can be find in the original paper
 import os
-import copy
+import gym
 import time
-import glob
 import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .utils import get_tensor
+
 from hiro.hiro_utils import LowReplayBuffer, HighReplayBuffer, ReplayBuffer, Subgoal
-from hiro.utils import _is_update
+from hiro.utils import _is_update, get_tensor
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 hyper_w = -0.05
@@ -400,7 +400,7 @@ class HigherController(TD3Controller):
 
         actions = get_tensor(actions)
         return self._train(
-            states, goals, actions, rewards, n_states, goals, not_don, is_high_con=True
+            states, goals, actions, rewards, n_states, goals, not_done, is_high_con=True
         )
 
 
@@ -483,7 +483,7 @@ class Agent:
         self, env, eval_episodes=10, render=False, save_video=False, sleep=-1
     ):
         if save_video:
-            from OpenGL import GL
+            from OpenGL import GL  # noqa
 
             env = gym.wrappers.Monitor(
                 env,
@@ -680,7 +680,7 @@ class HiroAgent(Agent):
         self.start_training_steps = start_training_steps
 
     def step(self, s, env, step, global_step=0, explore=False):
-        ## Lower Level Controller
+        # Lower Level Controller
         if explore:
             # Take random action for start_training_steps
             if global_step < self.start_training_steps:
@@ -694,7 +694,7 @@ class HiroAgent(Agent):
         obs, r, done, _ = env.step(a)
         n_s = obs["observation"]
 
-        ## Higher Level Controller
+        # Higher Level Controller
         # Take random action for start_training steps
         if explore:
             if global_step < self.start_training_steps:
@@ -732,7 +732,7 @@ class HiroAgent(Agent):
                     state_arr=np.array(self.buf[6]),
                     action_arr=np.array(self.buf[7]),
                 )
-                if logger != None:
+                if logger is not None:
                     logger.write(
                         "subgoal_dis",
                         np.linalg.norm(ss[: ac.shape[0]] + ac - ns[: ac.shape[0]]),

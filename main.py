@@ -2,12 +2,11 @@ import os
 import argparse
 import numpy as np
 import datetime
-import copy
+
 from envs import EnvWithGoal
 from envs.create_maze_env import create_maze_env
-from hiro.hiro_utils import Subgoal
 from hiro.utils import Logger, _is_update, record_experience_to_csv, listdirs
-from hiro.models import HiroAgent, TD3Agent
+from hiro.models_backwards_trick import HiroAgent, TD3Agent
 
 
 def run_evaluation(args, env, agent):
@@ -141,7 +140,7 @@ if __name__ == "__main__":
     parser.add_argument("--exp_name", default=None, type=str)
     # Model
     parser.add_argument("--model_path", default="model", type=str)
-    parser.add_argument("--log_path", default="log", type=str)
+    parser.add_argument("--log_path", default="logs", type=str)
     parser.add_argument("--policy_freq_low", default=2, type=int)
     parser.add_argument("--policy_freq_high", default=2, type=int)
     # Replay Buffer

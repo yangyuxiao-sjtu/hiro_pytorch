@@ -3,3 +3,4 @@
 .vscode
 __pycach__/
 test/*
+logs/
