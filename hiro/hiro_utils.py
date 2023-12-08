@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class ReplayBuffer:
@@ -49,21 +49,16 @@ class LowReplayBuffer(ReplayBuffer):
             state_dim, goal_dim, action_dim, buffer_size, batch_size
         )
         self.n_goal = np.zeros((buffer_size, goal_dim))
-        self.tensor_goal = torch.zeros((buffer_size, goal_dim)).to(device)
-        self.tensor_n_goal = torch.zeros((buffer_size, goal_dim)).to(device)
 
-    def append(
-        self, state, goal, action, n_state, n_goal, reward, done, tensor_g, tensor_n_g
-    ):
+    def append(self, state, goal, action, n_state, n_goal, reward, done):
         self.state[self.ptr] = state
         self.goal[self.ptr] = goal
         self.action[self.ptr] = action
         self.n_state[self.ptr] = n_state
         self.n_goal[self.ptr] = n_goal
         self.reward[self.ptr] = reward
-        self.not_done[self.ptr] = 1.0 - done
-        self.tensor_goal[self.ptr] = tensor_g
-        self.tensor_n_goal[self.ptr] = tensor_n_g
+        self.not_done[self.ptr] = 1. - done
+
         self.ptr = (self.ptr + 1) % self.buffer_size
         self.size = min(self.size + 1, self.buffer_size)
 
@@ -78,8 +73,6 @@ class LowReplayBuffer(ReplayBuffer):
             torch.FloatTensor(self.n_goal[ind]).to(self.device),
             torch.FloatTensor(self.reward[ind]).to(self.device),
             torch.FloatTensor(self.not_done[ind]).to(self.device),
-            self.tensor_goal[ind].clone(),
-            self.tensor_n_goal[ind].clone(),
         )
 
 
