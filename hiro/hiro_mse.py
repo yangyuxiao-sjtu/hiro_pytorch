@@ -18,8 +18,9 @@ from .utils import get_tensor
 from hiro.hiro_utils import LowReplayBuffer, HighReplayBuffer, ReplayBuffer, Subgoal
 from hiro.utils import _is_update
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-hyper_w = -0.05
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+hyper_w = 0.05
+hyper_limit=5
 class TD3Actor(nn.Module):
     def __init__(self, state_dim, goal_dim, action_dim, scale=None):
         super(TD3Actor, self).__init__()
@@ -151,7 +152,7 @@ class TD3Controller(object):
             os.path.join(model_path, self.name+"_critic2.h5"))
         )
 
-    def _train(self, states, goals, actions, rewards, n_states, n_goals, not_done,is_high_con=False,q_clip_eps=0.2):
+    def _train(self, states, goals, actions, rewards, n_states, n_goals, not_done,is_high_con=False,**kwargs):
         self.total_it += 1
         with torch.no_grad():
             noise = (
@@ -187,19 +188,23 @@ class TD3Controller(object):
             Q1 = self.critic1(states, goals, a)
            
             actor_loss = -Q1.mean() # multiply by neg becuz gradient ascent
-            if is_high_con==True:# use clamp
+            if is_high_con==True and 'kwargs' in kwargs:# use tricks
+                #print('hi')
+                kwargs=kwargs['kwargs']
                 Q1_detached = Q1.detach()
-                Q1_clamp = torch.clamp(
-                Q1_detached,
-                min=Q1_detached.mean() * (1 - q_clip_eps),
-                max=Q1_detached.mean() * (1 + q_clip_eps),
-                )
+                if  kwargs['mode']=='clamp':
+                    Q1_normed = torch.clamp(
+                    Q1_detached,
+                    min=Q1_detached.mean() * (1 - q_clip_eps),
+                    max=Q1_detached.mean() * (1 + q_clip_eps),
+                    )
+                elif kwargs['mode']=='min_max_norm':
+                    Q1_normed = (Q1_detached-Q1_detached.min())/(Q1_detached.max()-Q1_detached.min())
+
                 selected_states=states[:,:a.shape[1]]
                 selected_n_states=n_states[:,:a.shape[1]]
-                actor_loss_mse = Q1_clamp*torch.linalg.norm(selected_states+a-selected_n_states,dim =1)
+                actor_loss_mse = Q1_normed*torch.linalg.norm(selected_states+a-selected_n_states,dim =1)
                 actor_loss=actor_loss+hyper_w*actor_loss_mse.mean()
-
-
 
             self.actor_optimizer.zero_grad()
             actor_loss.backward()
@@ -341,7 +346,9 @@ class HigherController(TD3Controller):
             actions_arr.cpu().data.numpy())
 
         actions = get_tensor(actions)
-        return self._train(states, goals, actions, rewards, n_states, goals, not_don,is_high_con=True)
+        conf={'mode':'min_max_norm'}
+
+        return self._train(states, goals, actions, rewards, n_states, goals, not_done,is_high_con=True,kwargs=conf)
 
 class LowerController(TD3Controller):
     def __init__(
@@ -396,7 +403,7 @@ class Agent():
     def end_episode(self, episode, logger=None):
         raise NotImplementedError
     
-    def evaluate_policy(self, env, eval_episodes=10, render=False, save_video=False, sleep=-1):
+    def evaluate_policy(self, env, eval_episodes=10, render=False, save_video=False, sleep=-1,log_loc=False):
         if save_video:
             from OpenGL import GL
             env = gym.wrappers.Monitor(env, directory='video',
@@ -405,12 +412,15 @@ class Agent():
 
         success = 0
         rewards = []
+        ls = [[] for i in range(eval_episodes)]
+        dis = [[] for i in range(eval_episodes)]
         env.evaluate = True
         for e in range(eval_episodes):
             obs = env.reset()
             fg = obs['desired_goal']
             s = obs['observation']
             done = False
+
             reward_episode_sum = 0
             step = 0
             
@@ -421,7 +431,9 @@ class Agent():
                     env.render()
                 if sleep>0:
                     time.sleep(sleep)
-
+                if log_loc==True:
+                    ls[e].append(s[:2])
+                    dis[e].append(self.sg[:2])
                 a, r, n_s, done = self.step(s, env, step)
                 reward_episode_sum += r
                 
@@ -429,7 +441,7 @@ class Agent():
                 step += 1
                 self.end_step()
             else:
-                error_limit=5
+                error_limit=hyper_limit
                 error = np.sqrt(np.sum(np.square(fg-s[:2])))
                 print('Goal, Curr: (%02.2f, %02.2f, %02.2f, %02.2f)     Error:%.2f  Error_limit:%.2f'%(fg[0], fg[1], s[0], s[1], error,error_limit))
                 rewards.append(reward_episode_sum)
@@ -437,7 +449,9 @@ class Agent():
                 self.end_episode(e)
 
         env.evaluate = False
-        return np.array(rewards), success/eval_episodes
+        if log_loc==False:
+            return np.array(rewards), success/eval_episodes
+        return np.array(rewards),success/eval_episodes,ls,dis
 
 class TD3Agent(Agent):
     def __init__(
@@ -608,7 +622,7 @@ class HiroAgent(Agent):
             n_sg = self._choose_subgoal(step, s, self.sg, n_s)
         
         self.n_sg = n_sg
-        print('s:',n_s[:n_sg.shape[0]])
+        #print('s:',n_s[:n_sg.shape[0]])
         return a, r, n_s, done
 
     def append(self, step, s, a, n_s, r, d,logger=None,global_step=None):
@@ -678,7 +692,7 @@ class HiroAgent(Agent):
     def _choose_subgoal(self, step, s, sg, n_s):
         if step % self.buffer_freq == 0:
             sg = self.high_con.policy(s, self.fg)
-            print('sg:',sg)
+            #print('sg:',sg)
         else:
             sg = self.subgoal_transition(s, sg, n_s)
 
