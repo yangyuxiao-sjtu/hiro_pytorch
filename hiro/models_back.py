@@ -22,7 +22,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class TD3Actor(nn.Module):
     def __init__(self, state_dim, goal_dim, action_dim, scale=None):
-        super(TD3Actor, self).__init__()
+        super().__init__()
         if scale is None:
             scale = torch.ones(state_dim)
         else:
@@ -272,11 +272,10 @@ class TD3Controller(object):
                 actor_loss_new = -new_Q1.mean() * self.backward_weight
                 high_con.actor_optimizer.zero_grad()
                 actor_loss_new.backward()
+                high_con.actor_optimizer.step()
                 # for name, weight in high_con.actor.named_parameters():
                 #     if weight.requires_grad:
                 #         print("weight.grad:", weight.grad.mean(), weight.grad.min(), weight.grad.max())
-
-                high_con.actor_optimizer.step()
 
             self._update_target_network(self.critic1_target, self.critic1, self.tau)
             self._update_target_network(self.critic2_target, self.critic2, self.tau)

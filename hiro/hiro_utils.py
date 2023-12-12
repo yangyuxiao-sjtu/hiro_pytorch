@@ -45,7 +45,7 @@ class ReplayBuffer:
 
 class LowReplayBuffer(ReplayBuffer):
     def __init__(self, state_dim, goal_dim, action_dim, buffer_size, batch_size):
-        super(LowReplayBuffer, self).__init__(
+        super().__init__(
             state_dim, goal_dim, action_dim, buffer_size, batch_size
         )
         self.n_goal = np.zeros((buffer_size, goal_dim))
@@ -87,7 +87,7 @@ class HighReplayBuffer(ReplayBuffer):
         batch_size,
         freq,
     ):
-        super(HighReplayBuffer, self).__init__(
+        super().__init__(
             state_dim, goal_dim, action_dim, buffer_size, batch_size
         )
         self.action = np.zeros((buffer_size, subgoal_dim))
