@@ -7,15 +7,15 @@
 # (Data-Efficient Hierarchical Reinforcement Learning)
 # Parameters can be find in the original paper
 import os
-import gym
 import time
-import numpy as np
 
+import gym
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from hiro.hiro_utils import LowReplayBuffer, HighReplayBuffer, ReplayBuffer, Subgoal
+from hiro.hiro_utils import HighReplayBuffer, LowReplayBuffer, ReplayBuffer, Subgoal
 from hiro.utils import _is_update, get_tensor
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -523,10 +523,10 @@ class Agent:
             else:
                 error_limit = 5
                 error = np.sqrt(np.sum(np.square(fg - s[:2])))
-                print(
-                    "Goal, Curr: (%02.2f, %02.2f, %02.2f, %02.2f)     Error:%.2f  Error_limit:%.2f"
-                    % (fg[0], fg[1], s[0], s[1], error, error_limit)
-                )
+                # print(
+                #     "Goal, Curr: (%02.2f, %02.2f, %02.2f, %02.2f)     Error:%.2f  Error_limit:%.2f"
+                #     % (fg[0], fg[1], s[0], s[1], error, error_limit)
+                # )
                 rewards.append(reward_episode_sum)
                 success += 1 if error <= error_limit else 0
                 self.end_episode(e)
@@ -800,7 +800,7 @@ class HiroAgent(Agent):
     def end_episode(self, episode, logger=None):
         if logger:
             # log
-            logger.write("reward/Intrinsic Reward", self.episode_subreward, episode)
+            logger.write("eval/Intrinsic Reward", self.episode_subreward, episode)
 
             # Save Model
             if _is_update(episode, self.model_save_freq):

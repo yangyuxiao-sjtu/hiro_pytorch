@@ -1,15 +1,22 @@
-import os
-import copy
 import argparse
-import numpy as np
-import datetime
+import copy
+import os
 
+import numpy as np
 import torch
+from tqdm import tqdm
 
 from envs import EnvWithGoal
 from envs.create_maze_env import create_maze_env
-from hiro.utils import Logger, _is_update, record_experience_to_csv, listdirs
-from hiro.models_backwards_trick import HiroAgent, TD3Agent
+from hiro.models_back import HiroAgent, TD3Agent
+from hiro.utils import Logger, _is_update
+
+try:
+    import wandb
+
+    _wandb_installed = True
+except ImportError:
+    _wandb_installed = False
 
 
 def run_evaluation(args, env, agent):
@@ -38,12 +45,26 @@ class Trainer:
         self.env = env
         self.agent = agent
         log_path = os.path.join(args.log_path, experiment_name)
-        self.logger = Logger(log_path=log_path)
+        self.logger = Logger(log_path=log_path, use_wandb=args.use_wandb)
+        if args.use_wandb:
+            assert _wandb_installed, "Wandb not installed"
+            wandb.init(
+                project="HIRO",
+                dir=log_path,
+                config=args,
+                name=experiment_name,
+            )
+            # `train/` metrics use global step as x-axis
+            # `eval/` metrics use episode as x-axis
+            wandb.define_metric("train/step")
+            wandb.define_metric("train/*", step_metric="train/step")
+            wandb.define_metric("eval/step")
+            wandb.define_metric("eval/*", step_metric="eval/step")
 
     def train(self):
         global_step = 0
 
-        for e in np.arange(self.args.num_episode) + 1:
+        for e in tqdm(np.arange(self.args.num_episode) + 1):
             obs = self.env.reset()
             fg = obs["desired_goal"]
             s = obs["observation"]
@@ -61,7 +82,7 @@ class Trainer:
                 )
 
                 # Append
-                self.agent.append(step, s, a, n_s, r, done, self.logger, global_step)
+                self.agent.append(step, s, a, n_s, r, done)
 
                 # Train
                 losses, td_errors = self.agent.train(global_step)
@@ -77,7 +98,7 @@ class Trainer:
                 self.agent.end_step()
 
             self.agent.end_episode(e, self.logger)
-            self.logger.write("reward/Reward", episode_reward, e)
+            self.logger.write("eval/Exploration Reward", episode_reward, e)
             self.evaluate(e)
 
     def log(self, global_step, data):
@@ -88,10 +109,10 @@ class Trainer:
             global_step, args.writer_freq
         ):
             for k, v in losses.items():
-                self.logger.write("loss/%s" % (k), v, global_step)
+                self.logger.write("train/%s" % (k), v, global_step)
 
             for k, v in td_errors.items():
-                self.logger.write("td_error/%s" % (k), v, global_step)
+                self.logger.write("train/%s" % (k), v, global_step)
 
     def evaluate(self, e):
         # Print
@@ -99,7 +120,8 @@ class Trainer:
             agent = copy.deepcopy(self.agent)
             rewards, success_rate = agent.evaluate_policy(self.env)
             # rewards, success_rate = self.agent.evaluate_policy(self.env)
-            self.logger.write("Success Rate", success_rate, e)
+            self.logger.write("eval/Success Rate", success_rate, e)
+            self.logger.write_csv({"eval/Success Rate": success_rate})
 
             print(
                 "episode:{episode:05d}, mean:{mean:.2f}, std:{std:.2f}, median:{median:.2f}, success:{success:.2f}".format(
@@ -116,14 +138,14 @@ def setup_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
-    # random.seed(seed)
     torch.backends.cudnn.deterministic = True
+    # random.seed(seed)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    setup_seed(42)
     # Across All
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--train", action="store_true")
     parser.add_argument("--eval", action="store_true")
     parser.add_argument("--render", action="store_true")
@@ -148,7 +170,6 @@ if __name__ == "__main__":
         "--model_save_freq", default=2000, type=int, help="Unit = Episodes"
     )
     parser.add_argument("--print_freq", default=250, type=int, help="Unit = Episode")
-    parser.add_argument("--exp_name", default=None, type=str)
     # Model
     parser.add_argument("--model_path", default="model", type=str)
     parser.add_argument("--log_path", default="logs", type=str)
@@ -160,24 +181,34 @@ if __name__ == "__main__":
     parser.add_argument("--buffer_freq", default=10, type=int)
     parser.add_argument("--train_freq", default=10, type=int)
     parser.add_argument("--reward_scaling", default=0.1, type=float)
+
+    # Added
+    parser.add_argument("--use_reg_mse", action="store_true")
+    parser.add_argument("--use_backward_loss", action="store_true")
+    parser.add_argument(
+        "--reg_mse_weight", default=0.0, type=float
+    )  # weight for mse in high_con
+    parser.add_argument(
+        "--backward_weight", default=1.0, type=float
+    )  # weight for low_con backward to high_con
+    parser.add_argument("--use_wandb", action="store_true")
+
     args = parser.parse_args()
+    setup_seed(args.seed)
+
     if args.env == "PointMaze":
         args.subgoal_dim = 3
         args.num_episode = 20000
         args.model_save_freq = 1000
         args.print_freq = 100
-    # Select or Generate a name for this experiment
-    if args.exp_name:
-        experiment_name = args.exp_name
-    else:
-        if args.eval:
-            # choose most updated experiment for evaluation
-            dirs_str = listdirs(args.model_path)
-            dirs = np.array(list(map(int, dirs_str)))
-            experiment_name = dirs_str[np.argmax(dirs)]
-        else:
-            experiment_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    print(experiment_name)
+
+    experiment_name = f"{args.env}-" + ("td3" if args.td3 else "hiro")
+    if args.use_reg_mse:
+        experiment_name += f"-reg_{args.reg_mse_weight}"
+    if args.use_backward_loss:
+        experiment_name += f"-bkw_{args.backward_weight}"
+    experiment_name += f"/{args.seed}"
+    print("Experiment name: " + experiment_name)
 
     # Environment and its attributes
     env = EnvWithGoal(create_maze_env(args.env), args.env)
@@ -216,12 +247,14 @@ if __name__ == "__main__":
             reward_scaling=args.reward_scaling,
             policy_freq_high=args.policy_freq_high,
             policy_freq_low=args.policy_freq_low,
+            use_reg_mse=args.use_reg_mse,
+            use_backward_loss=args.use_backward_loss,
+            reg_mse_weight=args.reg_mse_weight,
+            backward_weight=args.backward_weight,
         )
 
     # Run training or evaluation
     if args.train:
-        # Record this experiment with arguments to a CSV file
-        record_experience_to_csv(args, experiment_name)
         # Start training
         trainer = Trainer(args, env, agent, experiment_name)
         trainer.train()

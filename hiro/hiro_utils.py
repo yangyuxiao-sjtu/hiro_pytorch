@@ -1,5 +1,5 @@
-import torch
 import numpy as np
+import torch
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -57,7 +57,7 @@ class LowReplayBuffer(ReplayBuffer):
         self.n_state[self.ptr] = n_state
         self.n_goal[self.ptr] = n_goal
         self.reward[self.ptr] = reward
-        self.not_done[self.ptr] = 1. - done
+        self.not_done[self.ptr] = 1.0 - done
 
         self.ptr = (self.ptr + 1) % self.buffer_size
         self.size = min(self.size + 1, self.buffer_size)

@@ -1,13 +1,16 @@
+import os
+import sys
 import unittest
+
 import numpy as np
-import sys, os
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
-from hiro.models import HiroAgent
-from hiro.hiro_utils import Subgoal, spawn_dims
 
 from envs import EnvWithGoal
 from envs.create_maze_env import create_maze_env
+from hiro.hiro_utils import Subgoal, spawn_dims
+from hiro.models import HiroAgent
 
 ENV_NAME = 'AntMaze'
 

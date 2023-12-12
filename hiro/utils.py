@@ -1,7 +1,9 @@
-import os
 import csv
+import os
+
 import numpy as np
 import torch
+import wandb
 from torch.utils.tensorboard import SummaryWriter
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -22,8 +24,13 @@ def get_tensor(z):
 
 
 class Logger:
-    def __init__(self, log_path):
-        self.writer = SummaryWriter(log_path)
+    def __init__(
+        self, log_path, use_wandb: bool = False, csv_log_file: str = "progress.csv"
+    ):
+        self.tb_writer = SummaryWriter(os.path.join(log_path, "tblogs"))
+        self.csv_fd = None
+        self.csv_log_path = os.path.join(log_path, csv_log_file)
+        self.use_wandb = use_wandb
 
     def print(self, name, value, episode=-1, step=-1):
         string = "{} is {}".format(name, value)
@@ -33,7 +40,29 @@ class Logger:
             print("Step:{}, {}".format(step, string))
 
     def write(self, name, value, index):
-        self.writer.add_scalar(name, value, index)
+        self.tb_writer.add_scalar(name, value, index)
+        if self.use_wandb:
+            if name.startswith("train/"):
+                metrics = {name: value, "train/step": int(index)}
+            elif name.startswith("eval/"):
+                metrics = {name: value, "eval/step": int(index)}
+            else:
+                raise ValueError(
+                    f"Metric name must start with train/ or eval/, but got {name}"
+                )
+            wandb.log(metrics)
+
+    def write_csv(self, data_dict):
+        if self.csv_fd is None:
+            first_time = True
+            self.csv_fd = open(self.csv_log_path, "w")
+        else:
+            first_time = False
+        writer = csv.DictWriter(self.csv_fd, fieldnames=list(data_dict.keys()))
+        if first_time:
+            writer.writeheader()
+        writer.writerow(data_dict)
+        self.csv_fd.flush()
 
 
 def _is_update(episode, freq, ignore=0, rem=0):

@@ -1,13 +1,15 @@
-import os
 import argparse
-import numpy as np
-import gymnasium as gym
-import datetime
 import copy
-from point_env import EnvWithGoal
+import datetime
+import os
+
+import gymnasium as gym
+import numpy as np
+
 from hiro.hiro_utils import Subgoal
-from hiro.utils import Logger, _is_update, record_experience_to_csv, listdirs
 from hiro.models import HiroAgent, TD3Agent
+from hiro.utils import Logger, _is_update, listdirs, record_experience_to_csv
+from point_env import EnvWithGoal
 
 U_MAZE = [
     [1, 1, 1, 1, 1],
@@ -94,10 +96,10 @@ class Trainer:
             global_step, args.writer_freq
         ):
             for k, v in losses.items():
-                self.logger.write("loss/%s" % (k), v, global_step)
+                self.logger.write("train/%s" % (k), v, global_step)
 
             for k, v in td_errors.items():
-                self.logger.write("td_error/%s" % (k), v, global_step)
+                self.logger.write("train/%s" % (k), v, global_step)
 
     def evaluate(self, e):
         # Print
@@ -105,7 +107,7 @@ class Trainer:
             agent = copy.deepcopy(self.agent)
             rewards, success_rate = agent.evaluate_policy(self.env)
             # rewards, success_rate = self.agent.evaluate_policy(self.env)
-            self.logger.write("Success Rate", success_rate, e)
+            self.logger.write("eval/Success Rate", success_rate, e)
 
             print(
                 "episode:{episode:05d}, mean:{mean:.2f}, std:{std:.2f}, median:{median:.2f}, success:{success:.2f}".format(

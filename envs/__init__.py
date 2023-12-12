@@ -1,7 +1,8 @@
 """Random policy on an environment."""
 
-import numpy as np
 import argparse
+
+import numpy as np
 
 import envs.create_maze_env
 

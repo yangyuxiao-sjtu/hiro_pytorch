@@ -1,11 +1,13 @@
-import gymnasium as gym
 import sys
+
+import gymnasium as gym
 
 # env = gym.make('PointMaze_UMazeDense-v3')
 """Random policy on an environment."""
 
-import numpy as np
 import argparse
+
+import numpy as np
 
 
 def get_goal_sample_fn(env_name, evaluate):

@@ -1,9 +1,14 @@
+import os
+import sys
 import unittest
+
 import numpy as np
-import sys, os
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
-from hiro.models import TD3Actor, TD3, get_tensor
+
+from hiro.models import TD3, TD3Actor, get_tensor
+
 
 class ModelsTest(unittest.TestCase):
     def test_td3actor_output_size(self):
