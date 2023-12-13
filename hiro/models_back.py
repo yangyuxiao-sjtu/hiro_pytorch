@@ -147,10 +147,12 @@ class TD3Controller(object):
         # episode is -1, then read most updated
         if episode < 0:
             episode_list = map(int, os.listdir(self.model_path))
+            if len(episode_list) == 0:
+                return
             episode = max(episode_list)
 
         model_path = os.path.join(self.model_path, str(episode))
-
+        print(f"\033[92m Loading model checkpoint {model_path} \033[0m")
         self.actor.load_state_dict(
             torch.load(os.path.join(model_path, self.name + "_actor.h5"))
         )
@@ -430,7 +432,7 @@ class HigherController(TD3Controller):
 
         return candidates[np.arange(batch_size), max_indices]
 
-    def train(self, replay_buffer, low_con, use_correction=True, **kwargs):
+    def train(self, replay_buffer: HighReplayBuffer, low_con: TD3Controller, use_correction: bool = True, **kwargs):
         if not self._initialized:
             self._initialize_target_networks()
 
@@ -718,11 +720,13 @@ class HiroAgent(Agent):
         use_backward_loss,
         reg_mse_weight,
         backward_weight,
+        use_correction,
     ):
         self.subgoal = Subgoal(subgoal_dim)
         scale_high = self.subgoal.action_space.high * np.ones(subgoal_dim)
 
         self.model_save_freq = model_save_freq
+        self.use_correction = use_correction
 
         self.high_con = HigherController(
             state_dim=state_dim,
@@ -855,7 +859,7 @@ class HiroAgent(Agent):
             # whether use correction or not
             if global_step % self.train_freq == 0:
                 loss, td_error = self.high_con.train(
-                    self.replay_buffer_high, self.low_con, use_correction=False
+                    self.replay_buffer_high, self.low_con, use_correction=self.use_correction
                 )
                 losses.update(loss)
                 td_errors.update(td_error)
@@ -879,7 +883,6 @@ class HiroAgent(Agent):
     def _choose_subgoal(self, step, s, sg, n_s):
         if step % self.buffer_freq == 0:
             sg = self.high_con.policy(s, self.fg)
-            # print('sg:',sg)
         else:
             sg = self.subgoal_transition(s, sg, n_s)
 
@@ -909,10 +912,10 @@ class HiroAgent(Agent):
         self.sr = 0
         self.buf = [None, None, None, 0, None, None, [], []]
 
-    def save(self, episode):
+    def save(self, episode: int):
         self.low_con.save(episode)
         self.high_con.save(episode)
 
-    def load(self, episode):
+    def load(self, episode: int):
         self.low_con.load(episode)
         self.high_con.load(episode)

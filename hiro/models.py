@@ -210,7 +210,7 @@ class TD3Controller(object):
             Q1 = self.critic1(states, goals, a)
 
             actor_loss = -Q1.mean()  # multiply by neg becuz gradient ascent
-            if is_high_con == True:  # use clamp
+            if is_high_con is True:  # use clamp
                 Q1_detached = Q1.detach()
                 Q1_clamp = torch.clamp(
                     Q1_detached,
