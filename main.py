@@ -6,7 +6,10 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from hiro.config import initialize_cuda_device
+
 initialize_cuda_device(1)
+
+
 from envs import EnvWithGoal
 from envs.create_maze_env import create_maze_env
 from hiro.models_back import HiroAgent, TD3Agent
