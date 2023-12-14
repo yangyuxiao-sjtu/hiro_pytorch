@@ -7,7 +7,7 @@ import torch
 from tqdm import tqdm
 from hiro.config import initialize_cuda_device
 
-initialize_cuda_device(1)
+initialize_cuda_device(0)
 
 
 from envs import EnvWithGoal
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     
 
     # Across All
-    parser.add_argument("--seed", type=int, default=2)
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--train", action="store_true")
     parser.add_argument("--eval", action="store_true")
     parser.add_argument("--render", action="store_true")
@@ -192,9 +192,10 @@ if __name__ == "__main__":
     # Added
     parser.add_argument("--use_correction", action="store_true")
     parser.add_argument("--use_reg_mse", action="store_true")
+    parser.add_argument("--use_prob_trick", action="store_true")
     parser.add_argument("--use_backward_loss", action="store_true")
     parser.add_argument(
-        "--reg_mse_weight", default=0.0, type=float
+        "--reg_mse_weight", default=0.05, type=float
     )  # weight for mse in high_con
     parser.add_argument(
         "--backward_weight", default=0.01, type=float
@@ -216,6 +217,9 @@ if __name__ == "__main__":
         experiment_name += "-corr"
     if args.use_reg_mse:
         experiment_name += f"-reg_{args.reg_mse_weight}"
+    if args.use_prob_trick:
+        experiment_name += "-prob"
+
     if args.use_backward_loss:
         experiment_name += f"-bkw_{args.backward_weight}"
     experiment_name += f"/{args.seed}"
@@ -264,6 +268,7 @@ if __name__ == "__main__":
             reg_mse_weight=args.reg_mse_weight,
             backward_weight=args.backward_weight,
             use_correction=args.use_correction,
+            use_prob_trick=args.use_prob_trick
         )
 
     # Run training or evaluation

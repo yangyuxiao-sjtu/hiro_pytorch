@@ -226,38 +226,46 @@ class TD3Controller(object):
                     )
                     selected_states = states[:, : a.shape[1]]
                     selected_n_states = n_states[:, : a.shape[1]]
+                if self.use_prob_trick:
+                    low_con=kwargs['policy']
+                    batch_size=kwargs['batch_size']
+                    state_arr=kwargs['state_arr']
+                    action_arr=kwargs['action_arr']
+                    action_dim=action_arr[0][0].shape
+                    observe_dim = state_arr[0][0].shape
+                    subgoal_dim =a.shape[1]
+                    sg = a.detach()
+                    # print('subgoal dim',sg.shape)
+                    # print('ac dim',state_arr.shape)
+                    sg =(sg + state_arr[:, 0, :subgoal_dim])[:, None]-state_arr[:, :, :subgoal_dim]
+                    sg = sg.reshape((-1,subgoal_dim)) 
+                    #print(sg.shape)
+                    action_arr=action_arr.reshape((-1,)+action_dim)
+                    state_arr = state_arr.reshape((-1,)+observe_dim)
+                    action_true = low_con.policy(state_arr,sg)
+                    action_arr= action_arr.cpu().numpy()
+ 
+                    difference=action_true-action_arr
+                    difference = np.where(difference != -np.inf, difference, 0)
+                    difference=np.linalg.norm(difference,axis =-1)
+                    difference=difference.reshape((batch_size,-1))
+                    difference=(difference-difference.min())/(difference.max()-difference.min())# another norm to prevent exp(diff)->0
+                    log_p=-0.5*np.sum(difference,axis =-1)
+                    prob = np.exp(log_p)
+                    prob=get_tensor(prob)
+                   
+                    actor_loss_mse = (
+                        prob
+                        * Q1_normed
+                        * torch.linalg.norm(selected_states + a - selected_n_states, dim=1)
+                    )
+                else :
+                   
+                    actor_loss_mse = (
+                        Q1_normed
+                        * torch.linalg.norm(selected_states + a - selected_n_states, dim=1)
+                    )
 
-                low_con = kwargs["policy"]
-                batch_size = kwargs["batch_size"]
-                state_arr = kwargs["state_arr"]
-                action_arr = kwargs["action_arr"]
-                action_dim = action_arr[0][0].shape
-                observe_dim = state_arr[0][0].shape
-                subgoal_dim = a.shape[1]
-
-                sg = a.detach()
-                sg = (sg + action_arr[:, 0, :subgoal_dim])[:None] - action_arr[
-                    :, :, subgoal_dim
-                ]
-                sg = sg.reshape((-1, subgoal_dim))
-
-                action_arr = action_arr.reshape((-1,) + action_dim)
-                state_arr = state_arr.reshape((-1,) + observe_dim)
-                action_true = low_con(state_arr, a.detach())
-
-                difference = action_true - action_arr
-                difference = torch.where(difference != -torch.inf, difference, 0)
-                difference = torch.linalg.norm(difference, axis=-1)
-                difference = difference.reshape((batch_size, -1))
-
-                log_p = -0.5 * torch.sum(difference, axis=-1)
-                prob = torch.exp(log_p)
-
-                actor_loss_mse = (
-                    prob
-                    * Q1_normed
-                    * torch.linalg.norm(selected_states + a - selected_n_states, dim=1)
-                )
                 actor_loss = actor_loss + self.reg_mse_weight * actor_loss_mse.mean()
 
             self.actor_optimizer.zero_grad()
@@ -347,6 +355,7 @@ class HigherController(TD3Controller):
         tau=0.005,
         use_reg_mse=False,
         reg_mse_weight=1.0,
+        use_prob_trick=False,
     ):
         super().__init__(
             state_dim,
@@ -365,6 +374,7 @@ class HigherController(TD3Controller):
         )
         self.name = "high"
         self.use_reg_mse = use_reg_mse
+        self.use_prob_trick=use_prob_trick
         self.reg_mse_weight = reg_mse_weight
         self.action_dim = action_dim
 
@@ -457,12 +467,27 @@ class HigherController(TD3Controller):
 
             actions = get_tensor(actions)
 
-        # conf={'mode':'min_max_norm',
+        # prob_trick={'mode':'min_max_norm',
         #       'policy':low_con,
         #       'state_arr':states_arr,
         #       'action_arr':actions_arr,
         #       'batch_size':replay_buffer.batch_size
         #       }
+        if self.use_reg_mse:
+            return self._train(
+            states,
+            goals,
+            actions,
+            rewards,
+            n_states,
+            goals,
+            not_done,
+            mode ='min_max_norm',
+            policy=low_con,
+            state_arr=states_arr,
+            action_arr=actions_arr,
+            batch_size= replay_buffer.batch_size,
+        )
 
         return self._train(
             states,
@@ -721,6 +746,7 @@ class HiroAgent(Agent):
         reg_mse_weight,
         backward_weight,
         use_correction,
+        use_prob_trick,
     ):
         self.subgoal = Subgoal(subgoal_dim)
         scale_high = self.subgoal.action_space.high * np.ones(subgoal_dim)
@@ -737,6 +763,7 @@ class HiroAgent(Agent):
             policy_freq=policy_freq_high,
             use_reg_mse=use_reg_mse,
             reg_mse_weight=reg_mse_weight,
+            use_prob_trick=use_prob_trick
         )
 
         self.low_con = LowerController(
