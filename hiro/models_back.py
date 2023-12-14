@@ -147,10 +147,12 @@ class TD3Controller(object):
         # episode is -1, then read most updated
         if episode < 0:
             episode_list = map(int, os.listdir(self.model_path))
+            if len(episode_list) == 0:
+                return
             episode = max(episode_list)
 
         model_path = os.path.join(self.model_path, str(episode))
-
+        print(f"\033[92m Loading model checkpoint {model_path} \033[0m")
         self.actor.load_state_dict(
             torch.load(os.path.join(model_path, self.name + "_actor.h5"))
         )
@@ -430,7 +432,7 @@ class HigherController(TD3Controller):
 
         return candidates[np.arange(batch_size), max_indices]
 
-    def train(self, replay_buffer, low_con, use_correction=True, **kwargs):
+    def train(self, replay_buffer: HighReplayBuffer, low_con: TD3Controller, use_correction: bool = True, **kwargs):
         if not self._initialized:
             self._initialize_target_networks()
 
@@ -724,6 +726,7 @@ class HiroAgent(Agent):
         scale_high = self.subgoal.action_space.high * np.ones(subgoal_dim)
 
         self.model_save_freq = model_save_freq
+        self.use_correction = use_correction
 
         self.use_correction=use_correction
         
@@ -882,7 +885,6 @@ class HiroAgent(Agent):
     def _choose_subgoal(self, step, s, sg, n_s):
         if step % self.buffer_freq == 0:
             sg = self.high_con.policy(s, self.fg)
-            # print('sg:',sg)
         else:
             sg = self.subgoal_transition(s, sg, n_s)
 
@@ -912,10 +914,10 @@ class HiroAgent(Agent):
         self.sr = 0
         self.buf = [None, None, None, 0, None, None, [], []]
 
-    def save(self, episode):
+    def save(self, episode: int):
         self.low_con.save(episode)
         self.high_con.save(episode)
 
-    def load(self, episode):
+    def load(self, episode: int):
         self.low_con.load(episode)
         self.high_con.load(episode)

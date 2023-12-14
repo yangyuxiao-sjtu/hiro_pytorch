@@ -171,7 +171,6 @@ if __name__ == "__main__":
     )
     parser.add_argument("--print_freq", default=250, type=int, help="Unit = Episode")
     # Model
-    parser.add_argument("--model_path", default="model", type=str)
     parser.add_argument("--log_path", default="logs", type=str)
     parser.add_argument("--policy_freq_low", default=2, type=int)
     parser.add_argument("--policy_freq_high", default=2, type=int)
@@ -183,6 +182,7 @@ if __name__ == "__main__":
     parser.add_argument("--reward_scaling", default=0.1, type=float)
 
     # Added
+    parser.add_argument("--use_correction", action="store_true")
     parser.add_argument("--use_reg_mse", action="store_true")
     parser.add_argument("--use_backward_loss", action="store_true")
     parser.add_argument(
@@ -191,7 +191,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--backward_weight", default=0.01, type=float
     )  # weight for low_con backward to high_con
-    parser.add_argument("--use_correction", action="store_true")
+    parser.add_argument("--continue_training", action="store_true")
     parser.add_argument("--use_wandb", action="store_true")
 
     args = parser.parse_args()
@@ -204,6 +204,8 @@ if __name__ == "__main__":
         args.print_freq = 100
 
     experiment_name = f"{args.env}-" + ("td3" if args.td3 else "hiro")
+    if args.use_correction:
+        experiment_name += "-corr"
     if args.use_reg_mse:
         experiment_name += f"-reg_{args.reg_mse_weight}"
     if args.use_backward_loss:
@@ -212,6 +214,7 @@ if __name__ == "__main__":
         experiment_name+=f"-cor_"
     experiment_name += f"/{args.seed}"
     print("Experiment name: " + experiment_name)
+    model_path = os.path.join(args.log_path, experiment_name, "models")
 
     # Environment and its attributes
     env = EnvWithGoal(create_maze_env(args.env), args.env)
@@ -228,7 +231,7 @@ if __name__ == "__main__":
             goal_dim=goal_dim,
             scale=scale,
             model_save_freq=args.model_save_freq,
-            model_path=os.path.join(args.model_path, experiment_name),
+            model_path=model_path,
             buffer_size=args.buffer_size,
             batch_size=args.batch_size,
             start_training_steps=args.start_training_steps,
@@ -241,7 +244,7 @@ if __name__ == "__main__":
             subgoal_dim=args.subgoal_dim,
             scale_low=scale,
             start_training_steps=args.start_training_steps,
-            model_path=os.path.join(args.model_path, experiment_name),
+            model_path=model_path,
             model_save_freq=args.model_save_freq,
             buffer_size=args.buffer_size,
             batch_size=args.batch_size,
@@ -254,11 +257,13 @@ if __name__ == "__main__":
             use_backward_loss=args.use_backward_loss,
             reg_mse_weight=args.reg_mse_weight,
             backward_weight=args.backward_weight,
-            use_correction=args.use_correction
+            use_correction=args.use_correction,
         )
 
     # Run training or evaluation
     if args.train:
+        if args.continue_training:
+            agent.load(-1)
         # Start training
         trainer = Trainer(args, env, agent, experiment_name)
         trainer.train()
