@@ -718,12 +718,15 @@ class HiroAgent(Agent):
         use_backward_loss,
         reg_mse_weight,
         backward_weight,
+        use_correction,
     ):
         self.subgoal = Subgoal(subgoal_dim)
         scale_high = self.subgoal.action_space.high * np.ones(subgoal_dim)
 
         self.model_save_freq = model_save_freq
 
+        self.use_correction=use_correction
+        
         self.high_con = HigherController(
             state_dim=state_dim,
             goal_dim=goal_dim,
@@ -855,7 +858,7 @@ class HiroAgent(Agent):
             # whether use correction or not
             if global_step % self.train_freq == 0:
                 loss, td_error = self.high_con.train(
-                    self.replay_buffer_high, self.low_con, use_correction=False
+                    self.replay_buffer_high, self.low_con, use_correction=self.use_correction
                 )
                 losses.update(loss)
                 td_errors.update(td_error)

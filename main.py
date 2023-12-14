@@ -117,7 +117,7 @@ class Trainer:
     def evaluate(self, e):
         # Print
         if _is_update(e, args.print_freq):
-            agent = copy.deepcopy(self.agent)
+            #agent = copy.deepcopy(self.agent)
             rewards, success_rate = agent.evaluate_policy(self.env)
             # rewards, success_rate = self.agent.evaluate_policy(self.env)
             self.logger.write("eval/Success Rate", success_rate, e)
@@ -145,7 +145,7 @@ def setup_seed(seed):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # Across All
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--train", action="store_true")
     parser.add_argument("--eval", action="store_true")
     parser.add_argument("--render", action="store_true")
@@ -189,8 +189,9 @@ if __name__ == "__main__":
         "--reg_mse_weight", default=0.0, type=float
     )  # weight for mse in high_con
     parser.add_argument(
-        "--backward_weight", default=1.0, type=float
+        "--backward_weight", default=0.01, type=float
     )  # weight for low_con backward to high_con
+    parser.add_argument("--use_correction", action="store_true")
     parser.add_argument("--use_wandb", action="store_true")
 
     args = parser.parse_args()
@@ -207,6 +208,8 @@ if __name__ == "__main__":
         experiment_name += f"-reg_{args.reg_mse_weight}"
     if args.use_backward_loss:
         experiment_name += f"-bkw_{args.backward_weight}"
+    if args.use_correction:
+        experiment_name+=f"-cor_"
     experiment_name += f"/{args.seed}"
     print("Experiment name: " + experiment_name)
 
@@ -251,6 +254,7 @@ if __name__ == "__main__":
             use_backward_loss=args.use_backward_loss,
             reg_mse_weight=args.reg_mse_weight,
             backward_weight=args.backward_weight,
+            use_correction=args.use_correction
         )
 
     # Run training or evaluation
