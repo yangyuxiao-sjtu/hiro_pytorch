@@ -15,10 +15,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from hiro.hiro_utils import HighReplayBuffer, LowReplayBuffer, ReplayBuffer, Subgoal
-from hiro.utils import _is_update, get_tensor
+from hiro.utils import _is_update, get_tensor,cuda_device_index
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device(f"cuda:{cuda_device_index}" if torch.cuda.is_available() else "cpu")
 
 class TD3Actor(nn.Module):
     def __init__(self, state_dim, goal_dim, action_dim, scale=None):
@@ -727,8 +727,6 @@ class HiroAgent(Agent):
 
         self.model_save_freq = model_save_freq
         self.use_correction = use_correction
-
-        self.use_correction=use_correction
         
         self.high_con = HigherController(
             state_dim=state_dim,

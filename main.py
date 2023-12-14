@@ -5,11 +5,13 @@ import os
 import numpy as np
 import torch
 from tqdm import tqdm
-
+from hiro.config import initialize_cuda_device
+initialize_cuda_device(1)
 from envs import EnvWithGoal
 from envs.create_maze_env import create_maze_env
 from hiro.models_back import HiroAgent, TD3Agent
 from hiro.utils import Logger, _is_update
+
 
 try:
     import wandb
@@ -144,8 +146,11 @@ def setup_seed(seed):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    # make all file use same device
+    
+
     # Across All
-    parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--seed", type=int, default=2)
     parser.add_argument("--train", action="store_true")
     parser.add_argument("--eval", action="store_true")
     parser.add_argument("--render", action="store_true")
@@ -210,8 +215,6 @@ if __name__ == "__main__":
         experiment_name += f"-reg_{args.reg_mse_weight}"
     if args.use_backward_loss:
         experiment_name += f"-bkw_{args.backward_weight}"
-    if args.use_correction:
-        experiment_name+=f"-cor_"
     experiment_name += f"/{args.seed}"
     print("Experiment name: " + experiment_name)
     model_path = os.path.join(args.log_path, experiment_name, "models")

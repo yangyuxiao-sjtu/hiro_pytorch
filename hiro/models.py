@@ -17,8 +17,10 @@ import torch.nn.functional as F
 
 from hiro.hiro_utils import HighReplayBuffer, LowReplayBuffer, ReplayBuffer, Subgoal
 from hiro.utils import _is_update, get_tensor
+from hiro.config import cuda_device_index
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(f"cuda:{cuda_device_index}" if torch.cuda.is_available() else "cpu")
 hyper_w = -0.05
 
 

@@ -5,8 +5,9 @@ import numpy as np
 import torch
 import wandb
 from torch.utils.tensorboard import SummaryWriter
+from hiro.config import cuda_device_index
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device(f"cuda:{cuda_device_index}" if torch.cuda.is_available() else "cpu")
 
 
 def var(tensor):

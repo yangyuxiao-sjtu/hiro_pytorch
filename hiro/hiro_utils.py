@@ -1,9 +1,9 @@
 import numpy as np
 import torch
+from hiro.config import cuda_device_index
+# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-
+device = torch.device(f"cuda:{cuda_device_index}" if torch.cuda.is_available() else "cpu")
 class ReplayBuffer:
     def __init__(self, state_dim, goal_dim, action_dim, buffer_size, batch_size):
         self.buffer_size = buffer_size
