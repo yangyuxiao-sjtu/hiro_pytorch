@@ -7,7 +7,7 @@ import torch
 from tqdm import tqdm
 from hiro.config import initialize_cuda_device
 
-initialize_cuda_device(0)
+initialize_cuda_device(1)
 
 
 from envs import EnvWithGoal
@@ -153,13 +153,13 @@ if __name__ == "__main__":
     
 
     # Across All
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=24)
     parser.add_argument("--train", action="store_true")
     parser.add_argument("--eval", action="store_true")
     parser.add_argument("--render", action="store_true")
     parser.add_argument("--save_video", action="store_true")
     parser.add_argument("--sleep", type=float, default=-1)
-    parser.add_argument("--eval_episodes", type=float, default=5, help="Unit = Episode")
+    parser.add_argument("--eval_episodes", type=float, default=20, help="Unit = Episode")
     parser.add_argument("--env", default="AntMaze", type=str)
     parser.add_argument("--td3", action="store_true")
 
@@ -195,14 +195,16 @@ if __name__ == "__main__":
     parser.add_argument("--use_prob_trick", action="store_true")
     parser.add_argument("--use_backward_loss", action="store_true")
     parser.add_argument(
-        "--reg_mse_weight", default=0.05, type=float
+        "--reg_mse_weight", default=0.01, type=float
     )  # weight for mse in high_con
     parser.add_argument(
         "--backward_weight", default=0.01, type=float
     )  # weight for low_con backward to high_con
     parser.add_argument("--continue_training", action="store_true")
     parser.add_argument("--use_wandb", action="store_true")
-
+    
+    ##add for eval_path:
+    parser.add_argument('--eval_path',default='/home/yuxiaoyang/hiro_pytorch/logs/AntMaze-hiro-corr-reg_0.05/0/models',type=str)
     args = parser.parse_args()
     setup_seed(args.seed)
 
@@ -225,6 +227,8 @@ if __name__ == "__main__":
     experiment_name += f"/{args.seed}"
     print("Experiment name: " + experiment_name)
     model_path = os.path.join(args.log_path, experiment_name, "models")
+    if args.eval:
+        model_path=args.eval_path
 
     # Environment and its attributes
     env = EnvWithGoal(create_maze_env(args.env), args.env)

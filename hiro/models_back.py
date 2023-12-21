@@ -146,7 +146,7 @@ class TD3Controller(object):
     def load(self, episode):
         # episode is -1, then read most updated
         if episode < 0:
-            episode_list = map(int, os.listdir(self.model_path))
+            episode_list = list(map(int, os.listdir(self.model_path)))
             if len(episode_list) == 0:
                 return
             episode = max(episode_list)
